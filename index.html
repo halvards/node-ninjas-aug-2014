@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title> HTTP 2.0 and NodeJS</title>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="chrome=1">
+  <!--<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">-->
+  <!--<meta name="viewport" content="width=device-width, initial-scale=1.0">-->
+  <!--This one seems to work all the time, but really small on ipad-->
+  <!--<meta name="viewport" content="initial-scale=0.4">-->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+   <link rel="shortcut icon" href=" theme/favicon.ico"/> 
+  <link rel="stylesheet" media="all" href="theme/css/default.css">
+  <link rel="stylesheet" media="all" href="theme/css/custom.css">
+  <link rel="stylesheet" media="only screen and (max-device-width: 480px)" href="theme/css/phone.css">
+  <base target="_blank"> <!-- This amazingness opens all links in a new tab. -->
+  <script data-main="js/slides" src="js/require-1.0.8.min.js"></script>
+
+</head>
+
+<body style="opacity: 0">
+
+<slides class="layout-widescreen">
+<slide class="title-slide segue dark nobackground">
+  <hgroup class="auto-fadein">
+
+    <h1> HTTP 2.0 and NodeJS</h1>
+    <h2> and SPDY</h2>
+    <p> Halvard Skogsrud, hskogsru@thoughtworks.com</p>
+  </hgroup>
+</slide>
+
+
+<slide  >
+  
+  
+    <hgroup>
+      <h2>Agenda</h2>
+      <h3></h3>
+    </hgroup>
+    <article ><ul>
+<li>Why HTTP 2.0?</li>
+<li>TCP refresher</li>
+<li>SPDY and HTTP 2.0</li>
+<li>New features</li>
+<li>Protocol negotation</li>
+<li>Server push demo</li>
+</ul></article>
+ 
+</slide>
+
+<slide class="img-top-center" >
+  
+  <aside class="note">
+    <section>
+      <ul><li>From Mike Belshe's paper on Why bandwidth doesn't matter much</li><li>Why is this? Latency</li></ul>
+    </section>
+  </aside>
+  
+  
+    <hgroup>
+      <h2>Why HTTP 2.0?</h2>
+      <h3></h3>
+    </hgroup>
+    <article ><p><img height=450 src=figures/PLT_BW.png /></p></article>
+ 
+</slide>
+
+<slide class="img-top-center" >
+  
+  
+    <hgroup>
+      <h2>Latency is the killer</h2>
+      <h3></h3>
+    </hgroup>
+    <article ><p><img height=450 src=figures/latency.png /></p></article>
+ 
+</slide>
+
+<slide  >
+  
+  <aside class="note">
+    <section>
+      <ul><li>Multiple connections: Spec recommended 2, browsers now use 6</li><li>We inline and sprite, so fewer roundtrips. Roundtrips are latency</li><li>Multiple sharded hosts, overloading switches etc.</li></ul>
+    </section>
+  </aside>
+  
+  
+    <hgroup>
+      <h2>HTTP 1.1 State of the Art</h2>
+      <h3></h3>
+    </hgroup>
+    <article ><ul>
+<li>Use persistent TCP connections</li>
+<li>Pipelining troublesome, so not used</li>
+<li>Multiple connections for parallelism</li>
+<li>Resource sharding for more parallelism</li>
+<li>Inlining and image spriting for fewer round trips</li>
+</ul></article>
+ 
+</slide>
+
+<slide  >
+  
+  <aside class="note">
+    <section>
+      <ul><li>Browsers open up to 6 connections (was 2)</li><li>Mobile network: what if your connection drops?</li></ul>
+    </section>
+  </aside>
+  
+  
+    <hgroup>
+      <h2></h2>
+      <h3></h3>
+    </hgroup>
+    <article ><article class="flexbox vcenter">
+  <object data="figures/tubes.svg" type="image/svg+xml" height="500px" width="900px"></object>
+</article></article>
+ 
+</slide>
+
+<slide  >
+  
+  <aside class="note">
+    <section>
+      <ul><li>TLS Handshakes add to the connection setup cost!</li></ul>
+    </section>
+  </aside>
+  
+  
+    <hgroup>
+      <h2></h2>
+      <h3></h3>
+    </hgroup>
+    <article ><article class="flexbox vcenter">
+  <img src="figures/image-search-dulles-va-ie9-cable-cropped-highlighted.png" alt="TLS Handshake" title="TLS Handshake">
+</article></article>
+ 
+</slide>
+
+<slide class="segue dark quote nobackground" >
+  
+  <aside class="note">
+    <section>
+      <ul><li>Initial congestion window</li></ul>
+    </section>
+  </aside>
+  
+  
+    <hgroup class="auto-fadein">
+      <h2>INITCWND</h2>
+      <h3></h3>
+    </hgroup>
+  
+</slide>
+
+<slide  >
+  
+  <aside class="note">
+    <section>
+      <ul><li>Early TCP specs said initcwnd = 1</li><li>Now 3</li><li>Google, Mozilla, others, want 10</li><li>Most CDNs use 10</li></ul>
+    </section>
+  </aside>
+  
+  
+    <hgroup>
+      <h2>TCP Congestion Control</h2>
+      <h3></h3>
+    </hgroup>
+    <article ><article class="flexbox vcenter">
+  <img src="figures/TCP1.png" class="reflect" alt="TCP Slow Start" title="TCP Slow Start">
+</article></article>
+ 
+</slide>
+
+<slide  >
+  
+  <aside class="note">
+    <section>
+      <ul><li></li></ul>
+    </section>
+  </aside>
+  
+  
+    <hgroup>
+      <h2>What is SPDY?</h2>
+      <h3></h3>
+    </hgroup>
+    <article ><ul>
+<li>An experimental protocol from Google, created in 2009</li>
+<li>The starting point for IETF's HTTP 2.0 standardisation work</li>
+<li>Not an acronym</li>
+<li>Keeps all existing HTTP status codes and headers</li>
+<li>Binary!</li>
+</ul></article>
+ 
+</slide>
+
+<slide  >
+  
+  <aside class="note">
+    <section>
+      <ul><li>The SPDY spec was the first draft of HTTP 2.0</li><li>There were competing specs from Microsoft and others</li><li>SPDY chosen because IETF favours implementation experience</li></ul>
+    </section>
+  </aside>
+  
+  
+    <hgroup>
+      <h2>HTTP 2.0 is almost here</h2>
+      <h3></h3>
+    </hgroup>
+    <article ><!--<iframe data-src="http://http2.github.io/http2-spec/"></iframe>-->
+
+<article class="flexbox vcenter">
+  <img src="figures/http2-spec-draft.png" alt="HTTP 2.0 Specification" title="HTTP 2.0 Specification">
+</article></article>
+ 
+</slide>
+
+<slide  >
+  
+  <aside class="note">
+    <section>
+      <ul><li>Not Safari</li><li>Twitter since 2012</li></ul>
+    </section>
+  </aside>
+  
+  
+    <hgroup>
+      <h2>Who supports SPDY?</h2>
+      <h3></h3>
+    </hgroup>
+    <article ><p><strong>Browsers:</strong> <br>Chrome (desktop, iOS, Android), Firefox, Opera, IE 11+ (on Win8+), Amazon Silk</p>
+<p><strong>Websites:</strong> <br>Google, Facebook, Twitter, and more.</p>
+<p><strong>Application servers/platforms:</strong> <br>Apache (mod_spdy), Nginx, Ruby, Python, NodeJS, Java (Jetty and Netty)</p>
+<p><strong>Networking tools:</strong> <br>F5, Wireshark, cURL (in progress)</p></article>
+ 
+</slide>
+
+<slide  >
+  
+  
+    <hgroup>
+      <h2>Who supports HTTP 2.0?</h2>
+      <h3></h3>
+    </hgroup>
+    <article ><!--<iframe data-src="https://github.com/http2/http2-spec/wiki/Implementations"></iframe>-->
+
+<article class="flexbox vcenter">
+  <img src="figures/http2-support.png" alt="HTTP 2.0 Implementations" title="HTTP 2.0 Implementations">
+</article></article>
+ 
+</slide>
+
+<slide  >
+  
+  <aside class="note">
+    <section>
+      <ul><li>Why? lots of intermediaries (reverse proxies in particular) assume port 80 traffic is HTTP and so tries to mess with it. Don't want this to be a barries to adoption</li></ul>
+    </section>
+  </aside>
+  
+  
+    <hgroup>
+      <h2>SPDY and HTTP 2.0 Goals</h2>
+      <h3></h3>
+    </hgroup>
+    <article ><ul>
+<li>Reduce end-user perceived latency</li>
+<li>Minimise deployment complexity: Don't require changes to existing network infrastructure</li>
+<li>Avoid the need for web site and web application creators to make changes</li>
+<li>Improve web security</li>
+</ul></article>
+ 
+</slide>
+
+<slide  >
+  
+  <aside class="note">
+    <section>
+      <ul><li>TLS means we tunnel through all those pesky intermediaries</li></ul>
+    </section>
+  </aside>
+  
+  
+    <hgroup>
+      <h2>SPDY and HTTP 2.0 Features</h2>
+      <h3></h3>
+    </hgroup>
+    <article ><ul>
+<li>Multiplex requests over a single TCP connection: Overcome TCP slow start</li>
+<li>Header compression: Reduce bandwidth usage</li>
+<li>Request prioritisation: Important resources arrive first</li>
+<li>Server push: Reduce number of round trips</li>
+<li>Run everything over TLS*</li>
+<li>No changes to methods, status codes, headers, or standard ports (80, 443)</li>
+</ul></article>
+ 
+</slide>
+
+<slide  >
+  
+  <aside class="note">
+    <section>
+      <ul><li>on-the-wire representation is a binary framing protocol</li><li>HTTP 1.1 supported pipelining, but responses still had to be returned in the order of requests</li><li>Leads to head-of-line blocking problems</li></ul>
+    </section>
+  </aside>
+  
+  
+    <hgroup>
+      <h2>Multiplexing</h2>
+      <h3></h3>
+    </hgroup>
+    <article ><article class="flexbox vcenter">
+  <object data="figures/spdy-multiplexing.svg" type="image/svg+xml" width="900px" height="500px"></object>
+</article></article>
+ 
+</slide>
+
+<slide  >
+  
+  <aside class="note">
+    <section>
+      <ul><li>Used to use zlib.</li><li>Now uses header tables shared between client and server. Incrementally updated</li><li></li></ul>
+    </section>
+  </aside>
+  
+  
+    <hgroup>
+      <h2>Header compression</h2>
+      <h3>Here be dragons!</h3>
+    </hgroup>
+    <article ><ul>
+<li>Why? Lots of mostly repeated header content in every request and response</li>
+<li>Initial spec used zlib but then CRIME came along</li>
+<li>CRIME (Compression Ratio Info-leak Made Easy): compression and encryption don't mix well</li>
+<li>Inject different plaintext and observe change in compressed size</li>
+<li>Now using HPACK, this has slowed implementation effort</li>
+</ul></article>
+ 
+</slide>
+
+<slide  >
+  
+  <aside class="note">
+    <section>
+      <ul><li>This is not WebSockets!</li></ul>
+    </section>
+  </aside>
+  
+  
+    <hgroup>
+      <h2>Server push</h2>
+      <h3>Shove resources down browsers' throats</h3>
+    </hgroup>
+    <article ><ul>
+<li>Send resources to browsers unsolicited</li>
+<li>By the time the browser has parsed the HTML/JS and wants to request the resource, it's already in the browser cache</li>
+</ul>
+<pre class="prettyprint" data-lang="javascript">
+<b>if (request.url === '/index.html'</b> && response.push) {
+  var stream = <b>response.push('/jquery.js'</b>, {'Content-Type': 'text/javascript'}, 
+  <b>fs.createReadStream('/jquery.js').pipe(stream)</b>;
+}
+</pre></article>
+ 
+</slide>
+
+<slide  >
+  
+  <aside class="note">
+    <section>
+      <ul>Chrome and Firefox have stated they will only support HTTP 2.0 over TLS.</li><li>Microsoft states they will support HTTP 2.0 plaintext</li></ul>
+    </section>
+  </aside>
+  
+  
+    <hgroup>
+      <h2>Negotiating HTTP 1.1 vs 2.0 vs SPDY</h2>
+      <h3></h3>
+    </hgroup>
+    <article ><ul>
+<li>NPN: Next Protocol Negotiation (SPDY)</li>
+<li>ALPN: Application Layer Protocol Negotiation (HTTP 2.0)</li>
+<li>These are TLS extensions</li>
+<li>Upgrade handshake for HTTP 2.0 over non-TLS connection</li>
+<li>Allows SPDY/HTTP 2.0 to run on the same ports as HTTP(S)</li>
+</ul></article>
+ 
+</slide>
+
+<slide  >
+  
+  <aside class="note">
+    <section>
+      <ul><li>What's different?</li></ul>
+    </section>
+  </aside>
+  
+  
+    <hgroup>
+      <h2>SPDY vs HTTP 2.0</h2>
+      <h3></h3>
+    </hgroup>
+    <article ><ul>
+<li>Protocol identification headers</li>
+<li>NPN vs ALPN for negotiating HTTP 1.1 vs 2.0 vs SPDY</li>
+<li>HTTP 2.0 supports plaintext mode via 'Upgrade' handshake*</li>
+</ul></article>
+ 
+</slide>
+
+<slide  >
+  
+  <aside class="note">
+    <section>
+      <ul><li>SPDY good, HTTP 2.0 too early</li><li>Similar challenges on other platforms</li></ul>
+    </section>
+  </aside>
+  
+  
+    <hgroup>
+      <h2>NodeJS Support</h2>
+      <h3></h3>
+    </hgroup>
+    <article ><ul>
+<li>SPDY support available for Connect-based applications via node-spdy</li>
+<li>Automated server push Express middleware via spdy-referrer-push</li>
+<li>HTTP 2.0 support available via node-http2</li>
+<li>BUT ALPN support will not be available until OpenSSL has stabilised its implementation. Or use a forked version of NodeJS.</li>
+</ul></article>
+ 
+</slide>
+
+<slide class="segue dark quote nobackground" >
+  
+  
+    <hgroup class="auto-fadein">
+      <h2>Server push demo!</h2>
+      <h3></h3>
+    </hgroup>
+  
+</slide>
+
+<slide  >
+  
+  
+    <hgroup>
+      <h2>References</h2>
+      <h3></h3>
+    </hgroup>
+    <article ><ul>
+<li>M. Belshe: <a href="https://docs.google.com/a/chromium.org/viewer?a=v&amp;pid=sites&amp;srcid=Y2hyb21pdW0ub3JnfGRldnxneDoxMzcyOWI1N2I4YzI3NzE2">More Bandwidth Doesn’t Matter (Much)</a></li>
+<li>IETF Draft: <a href="http://http2.github.io/http2-spec/">Hypertext Transfer Protocol version 2.0</a></li>
+<li>M. Nottingham: <a href="http://tools.ietf.org/html/draft-nottingham-http2-encryption-02">Opportunistic Encryption for HTTP URIs</a></li>
+<li><a href="https://github.com/indutny/node-spdy">NodeJS SPDY module</a> and <a href="https://github.com/molnarg/node-http2">NodeJS HTTP 2.0 module</a></li>
+<li>ExpressJS middleware for automatic server push:<br/> <a href="https://github.com/halvards/spdy-referrer-push">npm spdy-referrer-push</a> (Shameless plug)</li>
+<li><a href="http://www.eclipse.org/jetty/documentation/current/spdy.html">Jetty's SPDY modules</a></li>
+<li>C. Strom: <a href="http://pragprog.com/book/csspdy/the-spdy-book">The SPDY Book</a> (Very dated now)</li>
+</ul></article>
+ 
+</slide>
+
+
+<slide class="thank-you-slide segue nobackground">
+  <article class="flexbox vleft auto-fadein">
+    <h2> Thanks!</h2>
+    <p></p>
+  </article>
+  <p data-config-contact class="auto-fadein"> <span>npm</span> <a href="https://github.com/halvards/spdy-referrer-push">https://github.com/halvards/spdy-referrer-push</a></p>
+  </p>
+</slide>
+
+<slide class="backdrop"></slide>
+
+</slides>
+
+<!--[if IE]>
+  <script src="http://ajax.googleapis.com/ajax/libs/chrome-frame/1/CFInstall.min.js"></script>
+  <script>CFInstall.check({mode: 'overlay'});</script>
+<![endif]-->
+</body>
+</html>
